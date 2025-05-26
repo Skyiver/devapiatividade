@@ -1,8 +1,11 @@
+import os
 from config import create_app
 from controllers.atividade_controller import atividade_bp
 
 app = create_app()
-app.register_blueprint(atividade_bp, url_prefix='/atividades')
+
+app.register_blueprint(atividade_bp, url_prefix='/api/atividades')
 
 if __name__ == '__main__':
-    app.run(host='localhost', port=5002)
+    port = int(os.getenv("PORT", 5001))
+    app.run(host='0.0.0.0', port=port)
