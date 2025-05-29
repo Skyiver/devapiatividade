@@ -1,7 +1,5 @@
 from flask import Blueprint, jsonify, request
-from services.atividade_service import (
-    AtividadeService, AtividadeNotFound
-)
+from atividade_service.services.atividade_service import AtividadeService, AtividadeNotFound
 
 atividade_bp = Blueprint('atividade_bp', __name__)
 
@@ -26,15 +24,10 @@ def get_atividade(id_atividade):
     except AtividadeNotFound as e:
         return jsonify({'erro': str(e)}), 404
 
-@atividade_bp.route(
-    '/<int:id_atividade>/professor/<int:id_professor>',
-    methods=['GET']
-)
+@atividade_bp.route('/<int:id_atividade>/professor/<int:id_professor>', methods=['GET'])
 def get_atividade_para_professor(id_atividade, id_professor):
     try:
-        result = AtividadeService.obter_para_professor(
-            id_atividade, id_professor
-        )
+        result = AtividadeService.obter_para_professor(id_atividade, id_professor)
         return jsonify(result), 200
     except LookupError as e:
         return jsonify({"erro": str(e)}), 404

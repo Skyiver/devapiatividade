@@ -11,6 +11,10 @@ RUN pip install --upgrade pip && pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
+RUN find . -name "*.py" -print
+
+ENV PYTHONPATH=/app
+
 EXPOSE 5001
 
-ENTRYPOINT ["gunicorn", "--bind", "0.0.0.0:5001", "app:app"]
+ENTRYPOINT ["gunicorn", "--bind", "0.0.0.0:5001", "atividade_service.app:app"]

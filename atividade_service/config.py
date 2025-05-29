@@ -13,9 +13,9 @@ def create_app():
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
     app.config['DEBUG'] = True
 
-    # inicializa o db
     db.init_app(app)
+    
     with app.app_context():
         db.create_all()
-
+    
     return app
