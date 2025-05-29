@@ -13,29 +13,34 @@ from atividade_service.services.pessoa_service_client import PESSOA_SERVICE_URL
 
 @pytest.fixture
 def client():
+    # Cria aplicação e banco em memória
     app = create_app()
     app.register_blueprint(atividade_bp, url_prefix='/api/atividades')
     app.config['TESTING'] = True
     app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///:memory:'
-    
+    with app.app_context():
+        db.create_all()
     with app.test_client() as client:
-        with app.app_context():
-            db.create_all()
         yield client
+    # Cleanup após cada teste
+    with app.app_context():
+        db.session.remove()
+        db.drop_all()
 
 @pytest.fixture
 def mock_professor_service():
     with requests_mock.Mocker() as m:
-        # Corrigido: regex compatível com a URL real do serviço
-        url_pattern = re.compile(f"{re.escape(PESSOA_SERVICE_URL)}/professor/\\d+")
-        m.get(url_pattern, 
+        # Regex compatível com URL real do serviço de professores
+        url_pattern = re.compile(f"{re.escape(PESSOA_SERVICE_URL)}/\\d+")
+        m.get(url_pattern,
               json=lambda request, context: {
                   "id": int(request.url.split('/')[-1]),
                   "tipo": "professor"
-              }, 
+              },
               status_code=200)
         yield m
 
+# Testes básicos de GET e POST
 def test_listar_atividades_vazio(client):
     response = client.get("/api/atividades/")
     assert response.status_code == 200
@@ -63,9 +68,8 @@ def test_listar_atividades_apos_criacao(client, mock_professor_service):
         "id_professor": 101,
         "enunciado": "Desenvolver API RESTful"
     }
-    response = client.post("/api/atividades/", json=nova_atividade)
-    assert response.status_code == 201
-    id_atividade = response.json['id_atividade']
+    post = client.post("/api/atividades/", json=nova_atividade)
+    id_atividade = post.json['id_atividade']
 
     response = client.get("/api/atividades/")
     assert response.status_code == 200
@@ -73,49 +77,50 @@ def test_listar_atividades_apos_criacao(client, mock_professor_service):
     assert response.json[0]['id_atividade'] == id_atividade
 
 def test_obter_atividade_existente(client, mock_professor_service):
-    nova_atividade = {
-        "id_professor": 101,
-        "enunciado": "Desenvolver API RESTful"
-    }
-    response = client.post("/api/atividades/", json=nova_atividade)
-    id_atividade = response.json['id_atividade']
+    nova = {"id_professor": 101, "enunciado": "Desenvolver API RESTful"}
+    post = client.post("/api/atividades/", json=nova)
+    id_atividade = post.json['id_atividade']
 
     response = client.get(f"/api/atividades/{id_atividade}")
     assert response.status_code == 200
     assert response.json['id_atividade'] == id_atividade
-    assert response.json['enunciado'] == "Desenvolver API RESTful"
+    assert response.json['enunciado'] == nova['enunciado']
 
 def test_criar_atividade_id_duplicado(client, mock_professor_service):
     atividade = {
-        "id_atividade": 1001,  # ID fixo para evitar conflitos
+        "id_atividade": 1001,
         "id_professor": 101,
         "enunciado": "Primeira atividade"
     }
-    
-    # Primeira criação
-    response1 = client.post("/api/atividades/", json=atividade)
-    assert response1.status_code == 201
-    
-    # Segunda criação com mesmo ID
-    response2 = client.post("/api/atividades/", json=atividade)
-    assert response2.status_code == 400
-    assert 'erro' in response2.json
-    assert 'já existe' in response2.json['erro']
+    resp1 = client.post("/api/atividades/", json=atividade)
+    assert resp1.status_code == 201
+
+    resp2 = client.post("/api/atividades/", json=atividade)
+    assert resp2.status_code == 400
+    assert 'erro' in resp2.json
+    assert 'já existe' in resp2.json['erro']
 
 def test_obter_atividade_para_professor(client, mock_professor_service):
-    atividade = {
-        "id_professor": 101,
-        "enunciado": "Atividade específica"
-    }
-    response = client.post("/api/atividades/", json=atividade)
-    id_atividade = response.json['id_atividade']
+    atividade = {"id_professor": 101, "enunciado": "Atividade específica"}
+    post = client.post("/api/atividades/", json=atividade)
+    id_atividade = post.json['id_atividade']
 
-    # Professor correto
-    response = client.get(f"/api/atividades/{id_atividade}/professor/101")
-    assert response.status_code == 200
-    assert 'respostas' in response.json
+    # Professor correto recebe respostas
+    resp_correto = client.get(f"/api/atividades/{id_atividade}/professor/101")
+    assert resp_correto.status_code == 200
+    assert 'respostas' in resp_correto.json
 
-    # Outro professor
-    response = client.get(f"/api/atividades/{id_atividade}/professor/202")
-    assert response.status_code == 200
-    assert 'respostas' not in response.json
+    # Outro professor não vê respostas completas
+    resp_outro = client.get(f"/api/atividades/{id_atividade}/professor/202")
+    assert resp_outro.status_code == 200
+    assert 'respostas' not in resp_outro.json
+
+# Teste extra: POST com professor não existente deve retornar 404
+def test_criar_com_professor_inexistente(client, mock_professor_service):
+    # Sobrescreve para retornar 404
+    mock_professor_service.get(f"{PESSOA_SERVICE_URL}/999", status_code=404)
+    data = {"id_professor": 999, "enunciado": "Teste erro professor"}
+    resp = client.post("/api/atividades/", json=data)
+    assert resp.status_code == 404
+    assert 'erro' in resp.json
+    assert 'Professor não encontrado' in resp.json['erro']

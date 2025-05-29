@@ -1,5 +1,5 @@
 services:
-  web:
+  atividade-web:
     build: .
     container_name: atividade-web
     working_dir: /app
@@ -8,6 +8,7 @@ services:
     environment:
       - FLASK_ENV=development
       - DATABASE_URL=sqlite:////app/atividades.db
+      - PESSOA_SERVICE_URL=http://host.docker.internal:5002/api/professores
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:5001/api/atividades/ || exit 1"]
       interval: 5s
